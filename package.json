@@ -1,0 +1,27 @@
+{
+  "name": "oqm",
+  "version": "1.0.0",
+  "description": "node persistence library",
+  "main": "index.js",
+  "repository": " git@github.com:calitrix/oqm.git",
+  "author": "Johannes Klose <jklose@calitrix.com>",
+  "license": "MIT",
+  "private": false,
+  "prettier": {
+    "singleQuote": true,
+    "semi": false,
+    "trailingComma": "es5"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.3",
+    "jest": "^26.1.0",
+    "pg": "^8.4.1",
+    "prettier": "^2.6.2",
+    "ts-jest": "^26.1.1",
+    "typescript": "^3.9.5"
+  },
+  "peerDependencies": {
+    "pg": "^8.4.1"
+  },
+  "dependencies": {}
+}
