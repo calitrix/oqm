@@ -8,9 +8,7 @@ export type QueryObject = {
   values: any[]
 }
 
-export type FunctionalQueryParams = SqlStringParameter[] | undefined
-
-export type FunctionalQuery<V extends FunctionalQueryParams = any[]> = {
+export type FunctionalQuery<V extends SqlStringParameter[] = any[]> = {
   (...params: Partial<V>): FunctionalQuery<V>
 
   toQuery(): QueryObject

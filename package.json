@@ -1,8 +1,9 @@
 {
   "name": "oqm",
-  "version": "1.0.0",
+  "version": "0.4.0",
   "description": "node persistence library",
-  "main": "index.js",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
   "repository": " git@github.com:calitrix/oqm.git",
   "author": "Johannes Klose <jklose@calitrix.com>",
   "license": "MIT",
@@ -12,16 +13,28 @@
     "semi": false,
     "trailingComma": "es5"
   },
+  "scripts": {
+    "dev": "node scripts/build.js --watch",
+    "test": "jest",
+    "build": "node scripts/build.js",
+    "pre-release": "tsc --noEmit && yarn test",
+    "release": "node scripts/release.js"
+  },
   "devDependencies": {
-    "@types/jest": "^26.0.3",
-    "jest": "^26.1.0",
+    "@tsconfig/node16": "^1.0.3",
+    "@types/jest": "^27.5.1",
+    "@types/pg": "^8.6.5",
+    "esbuild": "^0.14.49",
+    "jest": "^28.1.0",
     "pg": "^8.4.1",
     "prettier": "^2.6.2",
-    "ts-jest": "^26.1.1",
-    "typescript": "^3.9.5"
+    "ts-jest": "^28.0.2",
+    "typescript": "^4.6.4"
   },
   "peerDependencies": {
     "pg": "^8.4.1"
   },
-  "dependencies": {}
+  "dependencies": {
+    "runtypes": "^6.5.1"
+  }
 }

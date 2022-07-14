@@ -77,7 +77,8 @@ describe('sql', () => {
     })
 
     it('should correctly enumerate parameters when combining', () => {
-      const queryA = sql`id = ${undefined}`
+      // TODO type for any injectable value
+      const queryA = sql<[unknown]>`id = ${undefined}`
       const queryB = sql`(SELECT id FROM bar WHERE stuff = ${2})`
       const queryC = sql`SELECT * FROM foo WHERE foo = ${3} AND ${queryA(
         queryB
@@ -90,7 +91,7 @@ describe('sql', () => {
     })
 
     it('should skip unused parameters while numerating', () => {
-      const queryA = sql`id = ${undefined}`
+      const queryA = sql<[unknown]>`id = ${undefined}`
       const queryB = sql`(SELECT id FROM bar WHERE stuff = true)`
       const queryC = sql`SELECT * FROM foo WHERE foo = ${3} AND ${queryA(
         queryB
