@@ -2,8 +2,14 @@
   "name": "oqm",
   "version": "0.4.0",
   "description": "node persistence library",
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
+  "type": "module",
+  "exports": {
+    "import": "./dist/index.esm.js",
+    "require": "./dist/index.cjs.js",
+    "types": "./dist/types/index.d.ts"
+  },
+  "main": "./dist/index.cjs.js",
+  "types": "./dist/types/index.d.ts",
   "repository": " git@github.com:calitrix/oqm.git",
   "author": "Johannes Klose <jklose@calitrix.com>",
   "license": "MIT",

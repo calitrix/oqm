@@ -1,4 +1,4 @@
-const { execSync } = require('child_process')
+import { execSync } from 'child_process'
 
 const version = process.argv[2]
 if (!['major', 'minor', 'patch'].includes(version)) {
