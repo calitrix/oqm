@@ -7,7 +7,6 @@
   "repository": " git@github.com:calitrix/oqm.git",
   "author": "Johannes Klose <jklose@calitrix.com>",
   "license": "MIT",
-  "private": false,
   "prettier": {
     "singleQuote": true,
     "semi": false,
@@ -36,5 +35,6 @@
   },
   "dependencies": {
     "runtypes": "^6.5.1"
-  }
+  },
+  "packageManager": "yarn@3.2.1"
 }
