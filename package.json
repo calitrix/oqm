@@ -16,7 +16,7 @@
     "dev": "node scripts/build.js --watch",
     "test": "jest",
     "build": "node scripts/build.js",
-    "pre-release": "tsc --noEmit && yarn test",
+    "pre-release": "tsc --noEmit && yarn test && yarn build",
     "release": "node scripts/release.js"
   },
   "devDependencies": {
