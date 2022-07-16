@@ -14,9 +14,11 @@ export type FunctionalQuery<V extends SqlStringParameter[] = any[]> = {
   toQuery(): QueryObject
 }
 
-type TemplateExpressions<V extends SqlStringParameter[]> = {
-  [K in keyof V]: V[K] | ((v: V[K]) => any)
-}
+type TemplateExpressions<V extends SqlStringParameter[]> = V extends []
+  ? []
+  : {
+      [K in keyof V]: V[K] | ((v: V[K]) => any)
+    }
 
 class ExtensibleFunction<T extends Function> extends Function {
   constructor(f: T) {
@@ -49,10 +51,7 @@ const queryReducer =
 export class CallableQuery<
   V extends SqlStringParameter[]
 > extends ExtensibleFunction<FunctionalQuery> {
-  constructor(
-    public strings: TemplateStringsArray,
-    public values: TemplateExpressions<V>
-  ) {
+  constructor(public strings: string[], public values: TemplateExpressions<V>) {
     // @ts-ignore
     super((...overrides: TemplateExpressions<V>) => {
       this.values = this.values.map((original, i) =>
@@ -78,7 +77,7 @@ export const sql = <V extends SqlStringParameter[]>(
   ...values: TemplateExpressions<V>
 ): FunctionalQuery<V> => {
   const queryFn = new CallableQuery<V>(
-    strings,
+    [...strings],
     values
   ) as unknown as FunctionalQuery<V> // TODO remove unknown
 

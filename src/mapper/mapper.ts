@@ -1,23 +1,33 @@
 import * as RT from '../runtypes'
 
-type Row = { [key: string]: unknown }
+import {
+  getAlias,
+  getDescribedFields,
+  getIdFieldName,
+  isArrayReference,
+  isBrand,
+  isMappableType,
+  isRecordReference,
+  MappableReflect,
+  MaybeBrandedArray,
+  OnlyReflect,
+  RecordFields,
+} from './reflect'
+import { Row } from './types'
 
-export type OfReflect = {
-  [T in RT.Reflect['tag']]: Extract<RT.Reflect, { tag: T }>
-}
-
+// TODO case-conversion
 const fieldToColumnName = (fieldName: string, alias?: string): string =>
   alias ? `${alias}__${fieldName}` : fieldName
 
 const mapRecord = (
   row: Row,
-  record: OfReflect['record'],
+  fields: RecordFields,
   alias?: string
 ): Record<string, unknown> | null => {
   let allNull = true
 
-  const result = Object.entries(record.fields).reduce(
-    (result, [fieldName, fieldReflect]) => {
+  const result = Object.keys(fields).reduce(
+    (result: Record<string, unknown>, fieldName) => {
       const nameInRow = fieldToColumnName(fieldName, alias)
 
       if (nameInRow in row) {
@@ -27,7 +37,7 @@ const mapRecord = (
 
       return result
     },
-    {} as Record<string, unknown>
+    {}
   )
 
   if (allNull) {
@@ -39,115 +49,43 @@ const mapRecord = (
   return result
 }
 
-const getIdColumn = (mapping: OfReflect['record']): string => {
-  const idField = Object.entries(mapping.fields).find(
-    ([_, fieldReflect]) =>
-      fieldReflect.tag === 'brand' && fieldReflect.brand === RT.IdBrand
-  )
-
-  if (idField) return idField[0]
-  return 'id'
-}
-
-const isReference = <R extends RT.Reflect>(reflect: R): boolean =>
-  reflect.tag === 'record' ||
-  (reflect.tag === 'brand' && reflect.entity.tag === 'record')
-
-const isArrayReference = <R extends RT.Reflect>(reflect: R): boolean =>
-  (reflect.tag === 'array' && reflect.element.tag === 'record') ||
-  (reflect.tag === 'array' &&
-    reflect.element.tag === 'brand' &&
-    reflect.element.entity.tag === 'record') ||
-  (reflect.tag === 'brand' &&
-    reflect.entity.tag === 'array' &&
-    reflect.entity.element.tag === 'record')
-
-const getRecordReflect = <
-  R extends OfReflect['record'] | OfReflect['array'] | OfReflect['brand']
->(
-  reflect: R
-): OfReflect['record'] => {
-  if (reflect.tag === 'record') {
-    return reflect
-  }
-  if (reflect.tag === 'array') {
-    if (reflect.element.tag === 'record') {
-      return reflect.element as OfReflect['record']
-    }
-    if (
-      reflect.element.tag === 'brand' &&
-      reflect.element.entity.tag === 'record'
-    ) {
-      return reflect.element.entity as OfReflect['record']
-    }
-  }
-  if (reflect.tag === 'brand' && reflect.entity.tag === 'record') {
-    return reflect.entity as OfReflect['record']
-  }
-  if (
-    reflect.tag === 'brand' &&
-    reflect.entity.tag === 'array' &&
-    reflect.entity.element.tag === 'record'
-  ) {
-    return reflect.entity.element as OfReflect['record']
-  }
-
-  throw new Error(`No nested record type at ${reflect.tag} type`)
-}
-
-const getAlias = <
-  R extends OfReflect['array'] | OfReflect['brand'] | OfReflect['record']
->(
-  reflect: R
-): string | undefined => {
-  if (reflect.tag == 'brand') {
-    return reflect.brand
-  }
-
-  if (reflect.tag === 'array' && reflect.element.tag === 'brand') {
-    return reflect.element.brand
-  }
-
-  return undefined
-}
-
-type MaybeAliased = OfReflect['brand'] | OfReflect['record']
-type MaybeAliasedArray = OfReflect['brand'] | OfReflect['array']
-
 const mapRow = <A = unknown>(
   rows: Row[],
   ptr: number,
-  mapping: MaybeAliased
+  mapping: MappableReflect
 ): [number, RT.Static<RT.Runtype<A>>] => {
-  const rootReflect = getRecordReflect(mapping)
+  const rootFields = getDescribedFields(mapping)
   const rootAlias = getAlias(mapping)
-  const root = mapRecord(rows[ptr], rootReflect, rootAlias)
+  const root = mapRecord(rows[ptr], rootFields, rootAlias)
 
   if (root == null) {
     return [ptr, root as unknown as A]
   }
 
   // 1:1 references
-  Object.entries(rootReflect.fields).forEach(([fieldName, fieldReflect]) => {
-    if (!isReference(fieldReflect)) {
+  Object.entries(rootFields).forEach(([fieldName, fieldReflect]) => {
+    if (!isRecordReference(fieldReflect)) {
       return
     }
 
     let obj = null
-    ;[ptr, obj] = mapRow(rows, ptr, fieldReflect as MaybeAliased)
+    ;[ptr, obj] = mapRow(rows, ptr, fieldReflect as MappableReflect)
 
     root[fieldName] = obj
   })
 
   // map m:m
   // TODO strongly typed filter method
-  const collectionMappings = Object.entries(rootReflect.fields).filter(
+  const collectionMappings = Object.entries(rootFields).filter(
     ([_, fieldReflect]) => isArrayReference(fieldReflect)
-  ) as [string, MaybeAliasedArray][]
+  ) as [string, MaybeBrandedArray][]
 
   if (collectionMappings.length) {
     let row = rows[ptr]
-    const rootIdColumn = fieldToColumnName(getIdColumn(rootReflect), rootAlias)
+    const rootIdColumn = fieldToColumnName(
+      getIdFieldName(rootFields),
+      rootAlias
+    )
     const rootIdValue = row[rootIdColumn]
 
     if (rootIdValue == null) {
@@ -169,9 +107,9 @@ const mapRow = <A = unknown>(
       collectionMappings.forEach(([fieldName, fieldReflect]) => {
         const items = itemsPerCollection[fieldName]
         const knownIds = knownIdsPerCollection[fieldName]
-        const element = getRecordReflect(fieldReflect)
+        const collectionFields = getDescribedFields(fieldReflect)
         const idColumn = fieldToColumnName(
-          getIdColumn(element),
+          getIdFieldName(collectionFields),
           getAlias(fieldReflect)
         )
         const idValue = row[idColumn]
@@ -184,15 +122,15 @@ const mapRow = <A = unknown>(
 
         if (!(idString in knownIds)) {
           knownIds[idString] = true
-          let aliasedRecord: MaybeAliased
+          let aliasedRecord: MappableReflect
 
-          if (fieldReflect.tag === 'brand') {
+          if (isBrand(fieldReflect)) {
             aliasedRecord = RT.Aliased(
               fieldReflect.brand,
-              (fieldReflect.entity as OfReflect['array']).element
+              (fieldReflect.entity as OnlyReflect<'array'>).element
             )
           } else {
-            aliasedRecord = fieldReflect.element as MaybeAliased
+            aliasedRecord = fieldReflect.element as MappableReflect
           }
 
           let obj = null
@@ -223,8 +161,10 @@ export const map = <A = unknown>(
   mapping: RT.Runtype<A>
 ): RT.Static<RT.Runtype<A>>[] => {
   const reflect = mapping.reflect
-  if (!['brand', 'record'.includes(reflect.tag)]) {
-    throw new Error(`Mapping needs to be a record type, not ${reflect.tag}`)
+  if (!isMappableType(reflect)) {
+    throw new Error(
+      `Mapping needs to be a [branded] record type, not ${reflect.tag}`
+    )
   }
 
   let ptr = 0
@@ -232,7 +172,7 @@ export const map = <A = unknown>(
   const result: RT.Static<RT.Runtype<A>>[] = []
 
   while (ptr < rows.length) {
-    ;[ptr, curr] = mapRow(rows, ptr, mapping.reflect as MaybeAliased)
+    ;[ptr, curr] = mapRow<A>(rows, ptr, reflect as MappableReflect)
     if (curr === null) {
       throw new Error('Given record type not mappable from given rows')
     }

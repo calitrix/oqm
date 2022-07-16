@@ -1,31 +1,26 @@
-import { Brand, Record, Reflect } from 'runtypes'
-import { OfReflect } from '../mapper'
+import {
+  getDescribedFields,
+  isBrand,
+  MaybeBrandedRecord,
+} from '../mapper/reflect'
+import { CallableQuery, FunctionalQuery, sql } from '../sql'
 
 // https://github.com/brianc/node-postgres/blob/master/lib/client.js#L385
 const escapeIdentifier = (str: string) => `"${str.replace(/"/g, '""')}"`
 
-type RecordOrAlias = Record<any, any> | Brand<any, Record<any, any>>
-
-export const columns = (...types: RecordOrAlias[]): string => {
+export const columns = (...types: MaybeBrandedRecord[]): CallableQuery<[]> => {
   const columns: string[] = []
 
   for (const type of types) {
-    let reflect: OfReflect['record']
-    let alias: string | null = null
-
-    if (type.reflect.tag === 'brand') {
-      alias = type.reflect.brand
-      reflect = type.reflect.entity as OfReflect['record']
-    } else {
-      reflect = type.reflect as OfReflect['record']
-    }
+    const alias = isBrand(type.reflect) ? type.reflect.brand : null
+    const fields = getDescribedFields(type.reflect)
 
     if (alias == null) {
-      for (const fieldName of Object.keys(reflect.fields)) {
+      for (const fieldName of Object.keys(fields)) {
         columns.push(escapeIdentifier(fieldName))
       }
     } else {
-      for (const fieldName of Object.keys(reflect.fields)) {
+      for (const fieldName of Object.keys(fields)) {
         columns.push(
           `${escapeIdentifier(alias)}.${escapeIdentifier(
             fieldName
@@ -35,5 +30,5 @@ export const columns = (...types: RecordOrAlias[]): string => {
     }
   }
 
-  return columns.join(', ')
+  return new CallableQuery([columns.join(', ')], [])
 }
