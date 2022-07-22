@@ -1,7 +1,7 @@
 import { Pool, PoolClient } from 'pg'
 import { map } from '../mapper'
 import { Runtype, Static } from '../runtypes'
-import { FunctionalQuery } from '../sql'
+import { CallableQuery } from '../sql'
 
 export type TxHandler<T> = (queryInterface: QueryInterface) => Promise<T>
 
@@ -9,7 +9,7 @@ export interface QueryInterface {
   tx<T>(fn: TxHandler<T>): Promise<T>
 
   query<A>(
-    query: FunctionalQuery,
+    query: CallableQuery<unknown[]>,
     mapping: Runtype<A>
   ): Promise<Static<Runtype<A>>[]>
 }
@@ -20,7 +20,7 @@ abstract class BaseClient implements QueryInterface {
   abstract tx<T>(fn: TxHandler<T>): Promise<T>
 
   async query<A>(
-    query: FunctionalQuery,
+    query: CallableQuery<unknown[]>,
     mapping: Runtype<A>
   ): Promise<Static<Runtype<A>>[]> {
     const result = await this.client.query(query.toQuery())

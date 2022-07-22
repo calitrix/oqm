@@ -1,44 +1,56 @@
-export type AsArray<T> = T extends any[] ? T : [T]
+import { MapConfig } from '../mapper/types'
+import {
+  CallableQuery,
+  CreatePartsFunction,
+  FunctionalArgs,
+  QueryObject,
+  SqlConfig,
+  SqlTemplate,
+} from './types'
 
-export type QueryParameter = any
-export type SqlStringParameter = any
-
-export type QueryObject = {
-  text: string
-  values: any[]
-}
-
-export type FunctionalQuery<V extends SqlStringParameter[] = any[]> = {
-  (...params: Partial<V>): FunctionalQuery<V>
-
-  toQuery(): QueryObject
-}
-
-type TemplateExpressions<V extends SqlStringParameter[]> = V extends []
-  ? []
-  : {
-      [K in keyof V]: V[K] | ((v: V[K]) => any)
-    }
-
-class ExtensibleFunction<T extends Function> extends Function {
-  constructor(f: T) {
-    return Object.setPrototypeOf(f, new.target.prototype)
-    super()
-  }
+const isCallableSqlTemplate = <Values extends unknown[]>(
+  subject: unknown
+): subject is CallableQuery<Values> => {
+  return (
+    typeof subject === 'function' &&
+    typeof (subject as CallableQuery<Values>).toQuery === 'function'
+  )
 }
 
 const queryReducer =
-  (values: TemplateExpressions<any>) =>
-  (acc: QueryObject, currString: string, i: number) => {
+  <Values extends unknown[]>(
+    values: Values,
+    config: MapConfig,
+    overrides?: Partial<FunctionalArgs<Values>>
+  ) =>
+  (acc: QueryObject<Values>, currString: string, i: number) => {
     if (i === 0) {
       acc.text += currString
       return acc
     }
 
-    const prevValue = values[i - 1]
+    const override = overrides?.[i - 1]
+    let prevValue = values[i - 1]
 
-    if (prevValue instanceof CallableQuery) {
-      acc = prevValue.strings.reduce(queryReducer(prevValue.values), acc)
+    // Resolve the actual value to use. Take an override value if given.
+    // Transform using the given function, if given.
+    if (override !== undefined) {
+      if (
+        typeof prevValue === 'function' &&
+        !isCallableSqlTemplate(prevValue)
+      ) {
+        prevValue = prevValue(override)
+      } else {
+        prevValue = override
+      }
+    }
+
+    if (isCallableSqlTemplate<Values>(prevValue)) {
+      const parts = prevValue.getParts(config)
+      acc = parts.texts.reduce(
+        queryReducer(parts.values, config, prevValue.inputs),
+        acc
+      )
     } else {
       acc.text += `$${acc.values.push(prevValue)}`
     }
@@ -48,38 +60,40 @@ const queryReducer =
     return acc
   }
 
-export class CallableQuery<
-  V extends SqlStringParameter[]
-> extends ExtensibleFunction<FunctionalQuery> {
-  constructor(public strings: string[], public values: TemplateExpressions<V>) {
-    // @ts-ignore
-    super((...overrides: TemplateExpressions<V>) => {
-      this.values = this.values.map((original, i) =>
-        overrides[i] === undefined ? original : overrides[i]
-      ) as TemplateExpressions<V>
-
-      return this
-    })
+export function createCallableQuery<Values extends unknown[]>(
+  getParts: CreatePartsFunction<Values>,
+  config: SqlConfig,
+  inputs?: Partial<FunctionalArgs<Values>>
+): CallableQuery<Values> {
+  const queryFunction: CallableQuery<Values> = function CallableQuery(
+    ...inputs
+  ) {
+    return createCallableQuery(getParts, config, inputs)
   }
 
-  toQuery(): QueryObject {
-    const queryObject: QueryObject = {
+  const toQuery: CallableQuery<Values>['toQuery'] = () => {
+    const parts = getParts(config)
+    const queryObject: QueryObject<Values> = {
       text: '',
-      values: [],
+      values: [] as unknown as QueryObject<Values>['values'],
     }
 
-    return this.strings.reduce(queryReducer(this.values), queryObject)
+    return parts.texts.reduce(
+      queryReducer(parts.values, config, inputs),
+      queryObject
+    )
   }
+
+  queryFunction.inputs = inputs
+  queryFunction.getParts = getParts
+  queryFunction.toQuery = toQuery
+
+  return queryFunction
 }
 
-export const sql = <V extends SqlStringParameter[]>(
-  strings: TemplateStringsArray,
-  ...values: TemplateExpressions<V>
-): FunctionalQuery<V> => {
-  const queryFn = new CallableQuery<V>(
-    [...strings],
-    values
-  ) as unknown as FunctionalQuery<V> // TODO remove unknown
+export const makeSql =
+  (config: SqlConfig = {}): SqlTemplate =>
+  (strings, ...values) =>
+    createCallableQuery(() => ({ texts: [...strings], values }), config)
 
-  return queryFn
-}
+export const sql = makeSql()

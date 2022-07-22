@@ -56,11 +56,11 @@ describe('sql', () => {
     it('should support complex parameters', () => {
       type User = { id: number; name: string }
       const queryFn = sql`SELECT * FROM foo WHERE bar = ${(user: User) =>
-        user.id} AND id = ${(n: number) => n}`
+        user.name} AND id = ${(n: number) => n * 2}`
 
       expect(queryFn({ id: 1, name: 'John Doe' }, 1).toQuery()).toEqual({
         text: 'SELECT * FROM foo WHERE bar = $1 AND id = $2',
-        values: [{ id: 1, name: 'John Doe' }, 1],
+        values: ['John Doe', 2],
       })
     })
   })
@@ -76,8 +76,17 @@ describe('sql', () => {
       })
     })
 
+    it('should evaluate overrides for combined queries', () => {
+      const queryA = sql`SELECT * FROM (${sql`SELECT 1`}) AS t`
+      const queryB = sql`SELECT 1, 2, 3`
+
+      expect(queryA(queryB).toQuery()).toEqual({
+        text: 'SELECT * FROM (SELECT 1, 2, 3) AS t',
+        values: [],
+      })
+    })
+
     it('should correctly enumerate parameters when combining', () => {
-      // TODO type for any injectable value
       const queryA = sql<[unknown]>`id = ${undefined}`
       const queryB = sql`(SELECT id FROM bar WHERE stuff = ${2})`
       const queryC = sql`SELECT * FROM foo WHERE foo = ${3} AND ${queryA(
