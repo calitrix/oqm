@@ -1,5 +1,7 @@
 import { execSync } from 'child_process'
 
+import pkg from '../package.json' assert { type: 'json' }
+
 const version = process.argv[2]
 if (!['major', 'minor', 'patch'].includes(version)) {
   console.error('usage: node scripts/publish.js major|minor|patch')
@@ -25,7 +27,7 @@ run('yarn pre-release')
 
 // 3. bump versions
 run(`yarn version ${version}`)
-const appliedVersion = require('../packages/common/package.json').version
+const appliedVersion = pkg.version
 
 // 4. create release commit & tag
 run('git add .')
