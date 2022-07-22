@@ -1,6 +1,6 @@
 {
   "name": "oqm",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "node persistence library",
   "main": "./dist/cjs",
   "types": "./dist/cjs/index.d.ts",
