@@ -84,7 +84,7 @@ const mapRow = <A = unknown>(
     }
 
     let obj = null
-    ;[ptr, obj] = mapRow(rows, ptr, fieldReflect as MappableReflect)
+    ;[ptr, obj] = mapRow(rows, ptr, fieldReflect as MappableReflect, config)
 
     root[fieldName] = obj
   })
@@ -152,7 +152,7 @@ const mapRow = <A = unknown>(
 
           let obj = null
           // eslint-disable-next-line no-param-reassign
-          ;[ptr, obj] = mapRow(rows, ptr, aliasedRecord)
+          ;[ptr, obj] = mapRow(rows, ptr, aliasedRecord, config)
           console
           items.push(obj)
         }
