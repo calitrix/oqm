@@ -1,8 +1,9 @@
 import * as RT from 'runtypes'
 
 import { Aliased, Id } from '../runtypes'
+import { camelCase, makeTransform, snakeCase } from './case'
 
-import { map } from './mapper'
+import { makeMap, map } from './mapper'
 
 describe('map', () => {
   const MapAB = RT.Record({
@@ -401,5 +402,19 @@ describe('map', () => {
     )
 
     expect(result).toEqual([{ a: 1, t1: [{ c: 3 }] }])
+  })
+
+  describe('makeMap', () => {
+    it('should allow case handling', () => {
+      const map = makeMap({
+        caseTransform: makeTransform(camelCase, snakeCase),
+      })
+      const result = map(
+        [{ some_column: 1 }],
+        RT.Record({ someColumn: RT.Number })
+      )
+
+      expect(result).toEqual([{ someColumn: 1 }])
+    })
   })
 })

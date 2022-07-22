@@ -1,4 +1,5 @@
 import * as RT from '../runtypes'
+import { CaseTransform } from './case'
 
 import {
   getAlias,
@@ -13,22 +14,35 @@ import {
   OnlyReflect,
   RecordFields,
 } from './reflect'
-import { Row } from './types'
+import { MapConfig, Row } from './types'
 
-// TODO case-conversion
-const fieldToColumnName = (fieldName: string, alias?: string): string =>
-  alias ? `${alias}__${fieldName}` : fieldName
+export const fieldToColumnName = (
+  fieldName: string,
+  alias?: string,
+  caseTransform?: CaseTransform
+): string => {
+  const nameWithCase = caseTransform
+    ? caseTransform.leftToRight(fieldName)
+    : fieldName
+
+  return alias ? `${alias}__${nameWithCase}` : nameWithCase
+}
 
 const mapRecord = (
   row: Row,
   fields: RecordFields,
-  alias?: string
+  alias?: string,
+  config?: MapConfig
 ): Record<string, unknown> | null => {
   let allNull = true
 
   const result = Object.keys(fields).reduce(
     (result: Record<string, unknown>, fieldName) => {
-      const nameInRow = fieldToColumnName(fieldName, alias)
+      const nameInRow = fieldToColumnName(
+        fieldName,
+        alias,
+        config?.caseTransform
+      )
 
       if (nameInRow in row) {
         result[fieldName] = row[nameInRow]
@@ -52,11 +66,12 @@ const mapRecord = (
 const mapRow = <A = unknown>(
   rows: Row[],
   ptr: number,
-  mapping: MappableReflect
+  mapping: MappableReflect,
+  config?: MapConfig
 ): [number, RT.Static<RT.Runtype<A>>] => {
   const rootFields = getDescribedFields(mapping)
   const rootAlias = getAlias(mapping)
-  const root = mapRecord(rows[ptr], rootFields, rootAlias)
+  const root = mapRecord(rows[ptr], rootFields, rootAlias, config)
 
   if (root == null) {
     return [ptr, root as unknown as A]
@@ -84,7 +99,8 @@ const mapRow = <A = unknown>(
     let row = rows[ptr]
     const rootIdColumn = fieldToColumnName(
       getIdFieldName(rootFields),
-      rootAlias
+      rootAlias,
+      config?.caseTransform
     )
     const rootIdValue = row[rootIdColumn]
 
@@ -110,7 +126,8 @@ const mapRow = <A = unknown>(
         const collectionFields = getDescribedFields(fieldReflect)
         const idColumn = fieldToColumnName(
           getIdFieldName(collectionFields),
-          getAlias(fieldReflect)
+          getAlias(fieldReflect),
+          config?.caseTransform
         )
         const idValue = row[idColumn]
 
@@ -156,29 +173,35 @@ const mapRow = <A = unknown>(
   return [ptr, root as A]
 }
 
-export const map = <A = unknown>(
+export type MapFunction = <A = unknown>(
   rows: Row[],
   mapping: RT.Runtype<A>
-): RT.Static<RT.Runtype<A>>[] => {
-  const reflect = mapping.reflect
-  if (!isMappableType(reflect)) {
-    throw new Error(
-      `Mapping needs to be a [branded] record type, not ${reflect.tag}`
-    )
-  }
+) => RT.Static<RT.Runtype<A>>[]
 
-  let ptr = 0
-  let curr: RT.Static<RT.Runtype<A>> | null = null
-  const result: RT.Static<RT.Runtype<A>>[] = []
-
-  while (ptr < rows.length) {
-    ;[ptr, curr] = mapRow<A>(rows, ptr, reflect as MappableReflect)
-    if (curr === null) {
-      throw new Error('Given record type not mappable from given rows')
+export const makeMap =
+  (config?: MapConfig): MapFunction =>
+  (rows, mapping) => {
+    const reflect = mapping.reflect
+    if (!isMappableType(reflect)) {
+      throw new Error(
+        `Mapping needs to be a [branded] record type, not ${reflect.tag}`
+      )
     }
-    result.push(curr)
-    ptr++
+
+    let ptr = 0
+    let curr: RT.Static<typeof mapping> | null = null
+    const result: RT.Static<typeof mapping>[] = []
+
+    while (ptr < rows.length) {
+      ;[ptr, curr] = mapRow(rows, ptr, reflect as MappableReflect, config)
+      if (curr === null) {
+        throw new Error('Given record type not mappable from given rows')
+      }
+      result.push(curr)
+      ptr++
+    }
+
+    return result
   }
 
-  return result
-}
+export const map = makeMap()
