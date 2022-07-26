@@ -63,6 +63,19 @@ describe('sql', () => {
         values: ['John Doe', 2],
       })
     })
+
+    it('should support reusing complex parameters', () => {
+      type User = { id: number; name: string }
+      const user: User = { id: 1, name: 'John Doe' }
+
+      const queryFn = sql`UPDATE users SET name = ${(user: User) =>
+        user.name} WHERE id = ${(user: User) => user.id}`
+
+      expect(queryFn(user, user).toQuery()).toEqual({
+        text: 'UPDATE users SET name = $1 WHERE id = $2',
+        values: ['John Doe', 1],
+      })
+    })
   })
 
   describe('query combination', () => {
