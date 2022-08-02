@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/calitrix/oqm/actions/workflows/tests.yml/badge.svg)](https://github.com/calitrix/oqm/actions/workflows/tests.yml) [![Bundle Size](https://img.shields.io/bundlephobia/min/oqm?label=bundle%20size)](https://bundlephobia.com/result?p=oqm) [![Downloads](https://img.shields.io/npm/dt/oqm.svg)](https://www.npmjs.com/package/oqm)
 
-Swiss-army-knife for writing SQL and mapping result in a typesafe way,using Typescript. If you don't feel like using a full-fledge ORM, keep reading.
+Swiss-army-knife for writing SQL and mapping result in a typesafe way, using Typescript. If you don't feel like using a full-fledge ORM, keep reading.
 
 oqm is built with simplicity in mind. Non-intrusive, non-opinionated, low-dependancy, no-bs. Write SQL as you please and get some kind helpers along the way for making your life easier.
 
@@ -82,13 +82,14 @@ const { rows } = await client.query(template.toQuery())
 const [user] = map(result, UserRecord)
 ```
 
-Lets drill down in the pieces above:
+This returns `user` as an object of type `User` with static types and auto-completion.
+Lets drill down how this happens:
 
 - `map()` takes an array of objects (e.g. a result set) plus a runtime type definition and transforms that array into the form as specified by the given runtime type
 - `UserRecord` declares a runtime type for `map` to inspect when transforming result sets (see [runtypes](https://github.com/pelotom/runtypes) for details as `oqm/runtypes` re-exports everything plus a few added helpers)
 - `Static<typeof UserRecord>` declares a compile-time type. The return value of `map` will be of this type
 
-Since we aren't code-generating types from the database schema, it's up to the developer how objects look like. And how data for these objects is fetched from the database. In essence, we are mapping **objects to queries**, not **objects to relations**. Hence the name of this library: it's **o**bject **q**uery **m**apper.
+Since we aren't code-generating types from the database schema, it's up to the developer how objects look like. And how data for these objects is fetched from the database. In essence, we are mapping **objects to and from queries**, not **objects to relations**. Hence the name of this library: it's **o**bject **q**uery **m**apper.
 
 ## I'm bored, show me the magic
 
@@ -96,18 +97,18 @@ I admit, using template strings for building queries [is not a new invention](ht
 
 ### Queries are functions
 
-Did you note that i used `template` as the variable name above? That's because every query is a re-usable query function.
+Did you note that i used `template` as the variable name above? That's because every query is a re-usable query function and you can call to create a derived query function.
 
 **Re-map input parameters**
 
 ```ts
 const userQuery = sql`SELECT * FROM users WHERE id = ${1}`
-const user1 = await client.query(userQuery.toString())
-const user2 = await client.query(userQuery(2).toString())
-const user3 = await client.query(userQuery(3).toString())
+const user1 = await client.query(userQuery.toQuery())
+const user2 = await client.query(userQuery(2).toQuery())
+const user3 = await client.query(userQuery(3).toQuery())
 ```
 
-What happened here? Every `sql` tagged string returns a (type-safe) function, accepting one argument for each end every sql parameter. Calling that function as outlined above returns a new version of that query with it's input parameters changed.
+What happened here? Every `sql` tagged string returns a (type-safe) function, accepting one argument for each end every sql parameter. Calling that function as outlined above returns a new version of that query with a different set of input parameters.
 
 **Map complex parameters**
 
@@ -137,9 +138,9 @@ Using a function as query parameter allows you to transform the given parameter 
 
 ```ts
 const updateEmailQuery = (user: User) =>
-  sql`UPDATE users SET email = ${user.email} WHERE id = ${user.id}`.toQuery()
+  sql`UPDATE users SET email = ${user.email} WHERE id = ${user.id}`
 
-const result = await client.query(updateEmailQuery(user))
+const result = await client.query(updateEmailQuery(user).toQuery())
 ```
 
 ### Queries can be composed
@@ -154,14 +155,17 @@ const recentSignupsFilter = sql`created_at >= CURRENT_TIMESTAMP - INTERVAL ${''}
 const allJohns = await client.query(
   selectUsersQuery(nameFilter('John Doe')).toQuery()
 )
+// SELECT * FROM users WHERE name = $1
+
 const lastWeek = await client.query(
   selectUsersQuery(recentSignupsFilter('7d')).toQuery()
 )
+// SELECT * FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL $1
 ```
 
-Queries can be nested as parameters to other queries to combine the. Calling `toQuery` on the outermost function will flatten all nested `text` and `values` fragments in correct order (and numbering for positional parameters) into a single query object.
+Queries can be given as parameters to other queries which combines them. Calling `toQuery` on the root query function will flatten all nested queries into a single query object while taking care of correctly numbering all positional query paramaters.
 
-You could get fancy and write some fragment combination helpers:
+You can get fancy and write some query fragment combination helpers:
 
 ```ts
 const selectUsersQuery = sql`SELECT * FROM users WHERE ${sql`1`}`
@@ -174,9 +178,10 @@ const recentJohns = await client.query(
     and(nameFilter('John Doe'), recentSignupsFilter('7d'))
   ).toQuery()
 )
+// SELECT * FROM users WHERE name = $1 AND created_at >= CURRENT_TIMESTAMP - INTERVAL $2
 ```
 
-But before you invent your custom SQL abstraction DSL you might aswell just go with an existing query builder like [knex](https://knexjs.org/).
+But before you invent your custom SQL abstraction DSL you may also think about going with an existing query builder like [knex](https://knexjs.org/).
 
 ### Nested reference mapping
 
@@ -226,7 +231,7 @@ const { rows } = await client.query(`
 const authors = map(rows, AuthorWithArticles)
 ```
 
-The `map` function will no group the result by author id and construct a result which
+The `map` function will group the result by author id and construct a result which
 
 - contains a single object for each unique author (identified by id)
 - assigns the array of articles to each author
@@ -252,7 +257,7 @@ const authors = map(rows, AuthorWithLastArticle)
 
 ### Mapping arbitrary results without added complexity
 
-Because, again, OQM doesn't care about actual table structures, it's quite trivial to map generated data to propper objects - something many ORMs require you to jump through hoops to achieve:
+Because, again, OQM doesn't care about actual table structures, it's quite trivial to map result sets with generated data to propper objects - something many ORMs require you to jump through hoops to achieve:
 
 ```ts
 const AuthorsWithStats = AuthorRecord.extend({
