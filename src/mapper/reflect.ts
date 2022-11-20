@@ -40,6 +40,12 @@ export const isIntersection = (
   return isOnlyReflect(reflect, 'intersect')
 }
 
+export const isUnion = (
+  reflect: AnyReflect
+): reflect is OnlyReflect<'union'> => {
+  return isOnlyReflect(reflect, 'union')
+}
+
 export const isBrand = (
   reflect: AnyReflect
 ): reflect is OnlyReflect<'brand'> => {
@@ -77,6 +83,14 @@ export const getDescribedFields = (reflect: AnyReflect): RecordFields => {
 
   if (isIntersection(reflect)) {
     return reflect.intersectees.reduce(
+      (acc: RecordFields, curr: AnyReflect) =>
+        Object.assign(acc, getDescribedFields(curr)),
+      {}
+    )
+  }
+
+  if (isUnion(reflect)) {
+    return reflect.alternatives.reduce(
       (acc: RecordFields, curr: AnyReflect) =>
         Object.assign(acc, getDescribedFields(curr)),
       {}

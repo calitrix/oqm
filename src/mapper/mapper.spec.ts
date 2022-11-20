@@ -404,6 +404,45 @@ describe('map', () => {
     expect(result).toEqual([{ a: 1, t1: [{ c: 3 }] }])
   })
 
+  it('should flatten unions and intersections', () => {
+    // All columns from unions and intersectons are mappable so the
+    // types need to be flattened to capture all possible column names.
+    // e.g:
+    // type mapping = {a: string} & ({b: 'a} | {b: 'b', c: boolean})
+    // => {a: string, b: 'a' | 'b', c: boolean}
+    const mapping = RT.Intersect(
+      RT.Record({
+        a: RT.String,
+      }),
+      RT.Union(
+        RT.Record({ b: RT.Literal('a') }),
+        RT.Record({
+          b: RT.Literal('b'),
+          c: RT.Boolean,
+        })
+      )
+    )
+
+    const result = map(
+      [
+        { a: 'a1', b: 'a', c: null },
+        { a: 'a2', b: 'b', c: false },
+      ],
+      mapping
+    )
+
+    expect(result).toEqual([
+      { a: 'a1', b: 'a', c: null },
+      { a: 'a2', b: 'b', c: false },
+    ])
+  })
+
+  it('should map literal types', () => {
+    expect(map([{ a: 'a' }], RT.Record({ a: RT.Literal('a') }))).toEqual([
+      { a: 'a' },
+    ])
+  })
+
   describe('makeMap', () => {
     it('should allow case handling', () => {
       const map = makeMap({
